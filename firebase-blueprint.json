@@ -1,0 +1,163 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private authenticated user profile and theme preferences.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User email address.",
+          "maxLength": 256
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Optional profile avatar URL.",
+          "maxLength": 1000
+        },
+        "preferredTheme": {
+          "type": "string",
+          "enum": ["light", "dark"],
+          "description": "User interface theme preference."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when profile was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when profile was last updated."
+        }
+      },
+      "required": ["uid", "email", "displayName", "preferredTheme", "createdAt", "updatedAt"]
+    },
+    "ChatSession": {
+      "title": "ChatSession",
+      "description": "A user-owned conversation session in SARTHI AI.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Short display title of the conversation.",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["chat", "image", "video"],
+          "description": "Last active generation mode in this conversation."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when chat was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when chat was last active."
+        }
+      },
+      "required": ["userId", "title", "mode", "createdAt", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "An individual user or assistant message inside a chat session.",
+      "type": "object",
+      "properties": {
+        "chatId": {
+          "type": "string",
+          "description": "Parent chat document ID.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "assistant"],
+          "description": "Message sender role."
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["chat", "image", "video"],
+          "description": "Mode used to produce this message."
+        },
+        "content": {
+          "type": "string",
+          "description": "Text or markdown body of the message.",
+          "maxLength": 32000
+        },
+        "mediaType": {
+          "type": "string",
+          "enum": ["none", "image", "video", "document"],
+          "description": "Attached or generated media type."
+        },
+        "mediaUrl": {
+          "type": "string",
+          "description": "URL or compact preview for attached/generated media.",
+          "maxLength": 200000
+        },
+        "attachmentName": {
+          "type": "string",
+          "description": "Original filename of uploaded document or image.",
+          "maxLength": 256
+        },
+        "sources": {
+          "type": "array",
+          "description": "Web search source citations attached to assistant replies."
+        },
+        "language": {
+          "type": "string",
+          "enum": ["hi", "en", "auto"],
+          "description": "Detected language of the message."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when message was stored."
+        }
+      },
+      "required": ["chatId", "userId", "role", "mode", "content", "mediaType", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Owner-only user profile and theme settings."
+    },
+    "/chats/{chatId}": {
+      "schema": { "$ref": "#/entities/ChatSession" },
+      "description": "User-owned chat threads."
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Messages belonging to a specific chat thread."
+    }
+  }
+}

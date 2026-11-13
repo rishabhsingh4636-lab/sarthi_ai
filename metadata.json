@@ -1,0 +1,6 @@
+{
+  "name": "SARTHI AI",
+  "description": "Multilingual AI workspace with live web search, multimodal vision and document analysis, image and video generation, and bilingual Hindi/English text-to-speech.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

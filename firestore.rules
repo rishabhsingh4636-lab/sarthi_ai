@@ -1,0 +1,157 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidOptionalString(data, field, maxLen) {
+      return !(field in data) || (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'preferredTheme', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'preferredTheme', 'createdAt', 'updatedAt'])
+        && data.uid is string
+        && data.uid == request.auth.uid
+        && data.uid.size() <= 128
+        && data.email is string
+        && data.email.size() <= 256
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 120
+        && isValidOptionalString(data, 'photoURL', 1000)
+        && data.preferredTheme in ['light', 'dark']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidChat(data) {
+      return data.keys().hasAll(['userId', 'title', 'mode', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'title', 'mode', 'createdAt', 'updatedAt'])
+        && data.userId is string
+        && data.userId == request.auth.uid
+        && data.userId.size() <= 128
+        && data.title is string
+        && data.title.size() >= 1
+        && data.title.size() <= 160
+        && data.mode in ['chat', 'image', 'video']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSources(sources) {
+      return sources is list
+        && sources.size() <= 8
+        && (
+          sources.size() == 0
+          || (
+            sources[0] is map
+            && sources[0].keys().hasAll(['title', 'url'])
+            && sources[0].keys().hasOnly(['title', 'url'])
+            && sources[0].title is string
+            && sources[0].title.size() <= 300
+            && sources[0].url is string
+            && sources[0].url.size() <= 1000
+          )
+        );
+    }
+
+    function isValidMessage(data, chatId) {
+      return data.keys().hasAll(['chatId', 'userId', 'role', 'mode', 'content', 'mediaType', 'createdAt'])
+        && data.keys().hasOnly(['chatId', 'userId', 'role', 'mode', 'content', 'mediaType', 'mediaUrl', 'attachmentName', 'sources', 'language', 'createdAt'])
+        && data.chatId is string
+        && data.chatId == chatId
+        && data.chatId.size() <= 128
+        && data.userId is string
+        && data.userId == request.auth.uid
+        && data.userId.size() <= 128
+        && data.role in ['user', 'assistant']
+        && data.mode in ['chat', 'image', 'video']
+        && data.content is string
+        && data.content.size() <= 32000
+        && data.mediaType in ['none', 'image', 'video', 'document']
+        && isValidOptionalString(data, 'mediaUrl', 200000)
+        && isValidOptionalString(data, 'attachmentName', 256)
+        && (!('sources' in data) || isValidSources(data.sources))
+        && (!('language' in data) || data.language in ['hi', 'en', 'auto'])
+        && data.createdAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && userId == request.auth.uid;
+      allow list: if false;
+      allow create: if isSignedIn()
+        && isValidId(userId)
+        && userId == request.auth.uid
+        && isValidUser(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(userId)
+        && userId == request.auth.uid
+        && isValidUser(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'preferredTheme', 'email', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /chats/{chatId} {
+      allow get: if isSignedIn() && isValidId(chatId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && isValidId(chatId)
+        && isValidChat(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(chatId)
+        && isValidChat(incoming())
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'mode', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(chatId) && existing().userId == request.auth.uid;
+
+      match /messages/{messageId} {
+        allow get: if isSignedIn()
+          && isValidId(chatId)
+          && isValidId(messageId)
+          && get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid;
+        allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+        allow create: if isSignedIn()
+          && isValidId(chatId)
+          && isValidId(messageId)
+          && isValidMessage(incoming(), chatId)
+          && incoming().createdAt == request.time
+          && get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid;
+        allow update: if false;
+        allow delete: if isSignedIn()
+          && isValidId(chatId)
+          && isValidId(messageId)
+          && get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid;
+      }
+    }
+  }
+}
